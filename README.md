@@ -175,6 +175,33 @@ Salida:
 - `outputs/pdd_eval/bootstrap_e10/report.txt`
 - `outputs/pdd_eval/bootstrap_e10/plots/*.png`
 
+## Cluster: simulaciones en paralelo (SLURM)
+
+1) Enviar todas las simulaciones con `job array`:
+
+```bash
+bash scripts/submit_cluster_bootstrap.sh
+```
+
+2) Ajustar escala/primarios por variables de entorno (ejemplo):
+
+```bash
+TRAIN_HOM=20 VAL_HOM=5 TRAIN_CHG=40 VAL_CHG=10 NOISY=30000 TARGET=300000 \
+SBATCH_PARTITION=gpu SBATCH_TIME=24:00:00 SBATCH_GRES=gpu:1 \
+bash scripts/submit_cluster_bootstrap.sh
+```
+
+Esto genera:
+- manifiesto de casos en `data/manifests/*.csv`
+- simulaciones y MHD en `data/gate/pdd_bootstrap_cluster/*`
+- dataset NPZ en `data/dataset_pdd_bootstrap_cluster/{train,val}`
+
+Scripts clave:
+- `src/build_cluster_manifest.py`: crea el manifiesto
+- `src/run_cluster_case.py`: ejecuta un caso por `task-id`
+- `scripts/slurm_sim_array.sh`: worker del array
+- `scripts/submit_cluster_bootstrap.sh`: launcher completo
+
 ## Notas ROCm
 - En ROCm, PyTorch suele exponer GPU como `cuda`.
 - El script usa `torch.device("cuda")` cuando está disponible.
