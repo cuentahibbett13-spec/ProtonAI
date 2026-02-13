@@ -1,0 +1,22 @@
+[Elements]
+Hydrogen: S=H ; Z=1 ; A=1.00794 g/mole
+Carbon:   S=C ; Z=6 ; A=12.0107 g/mole
+Nitrogen: S=N ; Z=7 ; A=14.0067 g/mole
+Oxygen:   S=O ; Z=8 ; A=15.999 g/mole
+Phosphorus: S=P ; Z=15 ; A=30.973762 g/mole
+Calcium: S=Ca ; Z=20 ; A=40.078 g/mole
+
+[Materials]
+CORTICAL_BONE_1850: d=1.85 g/cm3; n=6
++el: name=Hydrogen;   f=0.047
++el: name=Carbon;     f=0.144
++el: name=Nitrogen;   f=0.042
++el: name=Oxygen;     f=0.446
++el: name=Phosphorus; f=0.103
++el: name=Calcium;    f=0.218
+
+LUNG_0200: d=0.2 g/cm3; n=4
++el: name=Hydrogen; f=0.103
++el: name=Carbon;   f=0.105
++el: name=Nitrogen; f=0.031
++el: name=Oxygen;   f=0.761
