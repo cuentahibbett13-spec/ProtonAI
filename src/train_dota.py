@@ -73,6 +73,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--threshold-ratio", type=float, default=0.5)
     p.add_argument("--pdd-loss-weight", type=float, default=0.2)
     p.add_argument("--checkpoint-dir", type=str, default="checkpoints/dota")
+    p.add_argument("--require-cuda", action="store_true", help="Fail if CUDA is not available")
     return p
 
 
@@ -108,6 +109,9 @@ def main() -> None:
     )
 
     device = get_device()
+    if args.require_cuda and device.type != "cuda":
+        raise RuntimeError("CUDA is required (--require-cuda) but no GPU is available")
+
     model = DoTAModel(
         in_channels=1,
         feat_channels=args.feat_channels,
