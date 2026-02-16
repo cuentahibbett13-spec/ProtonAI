@@ -1,13 +1,23 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class WeightedMSEBraggLoss(nn.Module):
-    def __init__(self, threshold_ratio: float = 0.5, high_dose_weight: float = 4.0):
+    def __init__(
+        self,
+        threshold_ratio: float = 0.5,
+        high_dose_weight: float = 4.0,
+        exp_weight_scale: float = 0.0,
+        exp_weight_gamma: float = 6.0,
+    ):
         super().__init__()
         self.threshold_ratio = threshold_ratio
         self.high_dose_weight = high_dose_weight
+        self.exp_weight_scale = exp_weight_scale
+        self.exp_weight_gamma = exp_weight_gamma
 
     def forward(self, prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         if prediction.shape != target.shape:
@@ -17,6 +27,12 @@ class WeightedMSEBraggLoss(nn.Module):
         threshold = self.threshold_ratio * max_per_sample
         high_dose_mask = (target > threshold).float()
         weights = 1.0 + (self.high_dose_weight - 1.0) * high_dose_mask
+
+        if self.exp_weight_scale > 0.0:
+            target_norm = target / torch.clamp(max_per_sample, min=1e-8)
+            exp_term = torch.exp(self.exp_weight_gamma * target_norm) - 1.0
+            exp_term = exp_term / max(math.exp(self.exp_weight_gamma) - 1.0, 1e-8)
+            weights = weights * (1.0 + self.exp_weight_scale * exp_term)
 
         squared_error = (prediction - target) ** 2
         weighted_error = squared_error * weights
@@ -29,11 +45,15 @@ class WeightedMSEWithPDDLoss(nn.Module):
         threshold_ratio: float = 0.5,
         high_dose_weight: float = 4.0,
         pdd_loss_weight: float = 0.0,
+        exp_weight_scale: float = 0.0,
+        exp_weight_gamma: float = 6.0,
     ):
         super().__init__()
         self.base = WeightedMSEBraggLoss(
             threshold_ratio=threshold_ratio,
             high_dose_weight=high_dose_weight,
+            exp_weight_scale=exp_weight_scale,
+            exp_weight_gamma=exp_weight_gamma,
         )
         self.pdd_loss_weight = pdd_loss_weight
 

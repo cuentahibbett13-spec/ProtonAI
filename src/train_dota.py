@@ -107,6 +107,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--high-dose-weight", type=float, default=4.0)
     p.add_argument("--threshold-ratio", type=float, default=0.5)
     p.add_argument("--pdd-loss-weight", type=float, default=0.2)
+    p.add_argument("--exp-weight-scale", type=float, default=0.0, help="0 disables exponential weighting")
+    p.add_argument("--exp-weight-gamma", type=float, default=6.0, help="Exponent strength for dose weighting")
     p.add_argument("--checkpoint-dir", type=str, default="checkpoints/dota")
     p.add_argument("--require-cuda", action="store_true", help="Fail if CUDA is not available")
     return p
@@ -163,6 +165,8 @@ def main() -> None:
         threshold_ratio=args.threshold_ratio,
         high_dose_weight=args.high_dose_weight,
         pdd_loss_weight=args.pdd_loss_weight,
+        exp_weight_scale=args.exp_weight_scale,
+        exp_weight_gamma=args.exp_weight_gamma,
     )
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
@@ -191,6 +195,8 @@ def main() -> None:
                 "dropout": args.dropout,
                 "crop_shape": crop_shape,
                 "default_energy_mev": args.default_energy_mev,
+                "exp_weight_scale": args.exp_weight_scale,
+                "exp_weight_gamma": args.exp_weight_gamma,
             },
             last_path,
         )
@@ -212,6 +218,8 @@ def main() -> None:
                     "dropout": args.dropout,
                     "crop_shape": crop_shape,
                     "default_energy_mev": args.default_energy_mev,
+                    "exp_weight_scale": args.exp_weight_scale,
+                    "exp_weight_gamma": args.exp_weight_gamma,
                 },
                 best_path,
             )
