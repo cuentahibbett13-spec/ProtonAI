@@ -1,4 +1,5 @@
 import argparse
+import os
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -48,6 +49,30 @@ def get_device() -> torch.device:
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+def configure_rocm_runtime_dirs() -> None:
+    user = os.environ.get("USER", "user")
+
+    tmp_root = os.environ.get("TMPDIR")
+    if not tmp_root or not Path(tmp_root).exists():
+        tmp_root = f"/tmp/{user}/protonai_tmp"
+        os.environ["TMPDIR"] = tmp_root
+
+    tmp_path = Path(tmp_root)
+    tmp_path.mkdir(parents=True, exist_ok=True)
+
+    miopen_cache = os.environ.get("MIOPEN_CACHE_DIR")
+    if not miopen_cache:
+        miopen_cache = f"/tmp/{user}/miopen_cache"
+        os.environ["MIOPEN_CACHE_DIR"] = miopen_cache
+    Path(miopen_cache).mkdir(parents=True, exist_ok=True)
+
+    miopen_user_db = os.environ.get("MIOPEN_USER_DB_PATH")
+    if not miopen_user_db:
+        miopen_user_db = f"/tmp/{user}/miopen_user_db"
+        os.environ["MIOPEN_USER_DB_PATH"] = miopen_user_db
+    Path(miopen_user_db).mkdir(parents=True, exist_ok=True)
+
+
 def parse_crop_shape(shape_value) -> Optional[Tuple[int, int, int]]:
     if shape_value is None:
         return None
@@ -83,6 +108,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_arg_parser().parse_args()
+    configure_rocm_runtime_dirs()
 
     val_dir = Path(args.val_dir)
     files = sorted(val_dir.glob("*.npz"))
@@ -130,7 +156,10 @@ def main() -> None:
             ct_scale = max(float(np.max(np.abs(density))), 1.0)
             ct_like = density / ct_scale
 
-            energy_mev = float(data["energy_mev"]) if "energy_mev" in data else default_energy
+            if "energy_mev" in data:
+                energy_mev = float(np.array(data["energy_mev"]).reshape(-1)[0])
+            else:
+                energy_mev = default_energy
 
             ct_t = torch.from_numpy(ct_like).unsqueeze(0).unsqueeze(0).to(device)
             energy_t = torch.tensor([[energy_mev]], dtype=torch.float32, device=device)
