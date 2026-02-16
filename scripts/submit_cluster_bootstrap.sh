@@ -30,6 +30,9 @@ SBATCH_MEM="${SBATCH_MEM:-16G}"
 SBATCH_GRES="${SBATCH_GRES:-gpu:1}"
 SBATCH_JOB_NAME="${SBATCH_JOB_NAME:-protonai-sim}"
 SBATCH_ARRAY_MAX_PARALLEL="${SBATCH_ARRAY_MAX_PARALLEL:-}"
+SBATCH_ACCOUNT="${SBATCH_ACCOUNT:-}"
+SBATCH_QOS="${SBATCH_QOS:-}"
+SBATCH_CONSTRAINT="${SBATCH_CONSTRAINT:-}"
 
 python -m src.build_cluster_manifest \
   --train-hom-cases "$TRAIN_HOM" \
@@ -55,14 +58,27 @@ if [[ -n "$SBATCH_ARRAY_MAX_PARALLEL" ]]; then
   ARRAY_SPEC="1-$N_CASES%$SBATCH_ARRAY_MAX_PARALLEL"
 fi
 
-sbatch \
+SBATCH_ARGS=(
   --job-name "$SBATCH_JOB_NAME" \
   --partition "$SBATCH_PARTITION" \
   --time "$SBATCH_TIME" \
   --cpus-per-task "$SBATCH_CPUS" \
   --mem "$SBATCH_MEM" \
   --gres "$SBATCH_GRES" \
-  --array "$ARRAY_SPEC" \
+  --array "$ARRAY_SPEC"
+)
+
+if [[ -n "$SBATCH_ACCOUNT" ]]; then
+  SBATCH_ARGS+=(--account "$SBATCH_ACCOUNT")
+fi
+if [[ -n "$SBATCH_QOS" ]]; then
+  SBATCH_ARGS+=(--qos "$SBATCH_QOS")
+fi
+if [[ -n "$SBATCH_CONSTRAINT" ]]; then
+  SBATCH_ARGS+=(--constraint "$SBATCH_CONSTRAINT")
+fi
+
+sbatch "${SBATCH_ARGS[@]}" \
   scripts/slurm_sim_array.sh \
   "$MANIFEST" \
   "$NOISY" \

@@ -204,11 +204,25 @@ Scripts clave:
 - `src/run_cluster_case.py`: ejecuta un caso por `task-id`
 - `scripts/slurm_sim_array.sh`: worker del array
 - `scripts/submit_cluster_bootstrap.sh`: launcher completo
+- `scripts/submit_yuca_atomic_sweep.sh`: launcher recomendado para Yuca (atómico + sweep)
 
 Puedes limitar paralelismo para no saturar el cluster:
 
 ```bash
 SBATCH_ARRAY_MAX_PARALLEL=20 bash scripts/submit_cluster_bootstrap.sh
+```
+
+### Launcher rápido para Yuca
+
+```bash
+bash scripts/submit_yuca_atomic_sweep.sh
+```
+
+Con cuenta/QOS/constraint del clúster:
+
+```bash
+SBATCH_ACCOUNT=mi_cuenta SBATCH_QOS=normal SBATCH_CONSTRAINT=mi210 \
+bash scripts/submit_yuca_atomic_sweep.sh
 ```
 
 ## DoTA (secuencia causal) - inicio de migración
