@@ -17,7 +17,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--geant4-data-root",
         type=str,
-        default="/home/fer/geant4_install/geant4-install/share/Geant4/data",
+        default="",
     )
     return parser
 
@@ -25,7 +25,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_arg_parser().parse_args()
 
-    set_geant4_data_env(args.geant4_data_root)
+    if args.geant4_data_root:
+        set_geant4_data_env(args.geant4_data_root)
 
     manifest_path = Path(args.manifest)
     if not manifest_path.exists():
