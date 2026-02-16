@@ -22,10 +22,7 @@ fi
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-VENV_PATH="${VENV_PATH:-../Modular3/.venv}"
-if [[ ! -x "$VENV_PATH/bin/python" ]]; then
-  VENV_PATH=".venv"
-fi
+VENV_PATH="${VENV_PATH:-$ROOT_DIR/.venv}"
 source "$VENV_PATH/bin/activate"
 
 python -m src.run_cluster_case \
