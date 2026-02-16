@@ -73,6 +73,7 @@ fi
 
 SBATCH_ARGS=(
   --job-name "$SBATCH_JOB_NAME" \
+  --chdir "$ROOT_DIR" \
   --time "$SBATCH_TIME" \
   --cpus-per-task "$SBATCH_CPUS" \
   --mem "$SBATCH_MEM" \
