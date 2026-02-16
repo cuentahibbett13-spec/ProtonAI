@@ -1,5 +1,7 @@
 import argparse
 import os
+import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -8,7 +10,9 @@ from torch.utils.data import DataLoader
 
 try:
     from tqdm import tqdm
+    HAS_TQDM = True
 except Exception:
+    HAS_TQDM = False
     def tqdm(iterable, **kwargs):
         return iterable
 
@@ -64,9 +68,21 @@ def run_epoch(model, loader, optimizer, criterion, device, training: bool, epoch
     n = 0
 
     phase = "train" if training else "val"
-    progress = tqdm(loader, desc=f"Epoch {epoch:03d} [{phase}]", leave=False)
+    total_batches = len(loader)
+    progress = tqdm(
+        loader,
+        total=total_batches,
+        desc=f"Epoch {epoch:03d} [{phase}]",
+        leave=False,
+        dynamic_ncols=True,
+        mininterval=0.5,
+        file=sys.stdout,
+        disable=False,
+    )
 
-    for ct, energy, target in progress:
+    epoch_start = time.perf_counter()
+
+    for batch_idx, (ct, energy, target) in enumerate(progress, start=1):
         ct = ct.to(device, non_blocking=True)
         energy = energy.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
@@ -85,6 +101,21 @@ def run_epoch(model, loader, optimizer, criterion, device, training: bool, epoch
         n += 1
         if hasattr(progress, "set_postfix"):
             progress.set_postfix(loss=f"{running_loss / max(n, 1):.6f}")
+
+        if not HAS_TQDM and (batch_idx == 1 or batch_idx % 10 == 0 or batch_idx == total_batches):
+            elapsed = max(time.perf_counter() - epoch_start, 1e-8)
+            rate = batch_idx / elapsed
+            remaining = max(total_batches - batch_idx, 0)
+            eta_sec = remaining / max(rate, 1e-8)
+            print(
+                f"Epoch {epoch:03d} [{phase}] {batch_idx}/{total_batches} "
+                f"loss={running_loss / max(n, 1):.6f} "
+                f"rate={rate:.2f}it/s eta={eta_sec:.1f}s",
+                flush=True,
+            )
+
+    if hasattr(progress, "close"):
+        progress.close()
 
     return running_loss / max(n, 1)
 
