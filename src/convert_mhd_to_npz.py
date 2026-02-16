@@ -1,6 +1,6 @@
 import argparse
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 
@@ -66,7 +66,7 @@ def convert_to_npz(
     target_mhd: str,
     density_mhd: str,
     output_npz: str,
-    energy_mev: float | None = None,
+    energy_mev: Optional[float] = None,
 ) -> None:
     noisy_dose, spacing_noisy = read_mhd_volume(noisy_mhd)
     target_dose, spacing_target = read_mhd_volume(target_mhd)

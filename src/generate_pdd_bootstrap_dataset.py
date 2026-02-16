@@ -4,6 +4,7 @@ from pathlib import Path
 import random
 import subprocess
 import sys
+from typing import Optional
 
 import numpy as np
 
@@ -73,7 +74,7 @@ def run_simulation_subprocess(
     subprocess.run(cmd, check=True)
 
 
-def write_labels_materials(path: Path, material1: str, material2: str | None = None) -> None:
+def write_labels_materials(path: Path, material1: str, material2: Optional[str] = None) -> None:
     if material2 is None:
         text = "0 0 G4_WATER\n"
     else:
