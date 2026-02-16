@@ -109,6 +109,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--pdd-loss-weight", type=float, default=0.2)
     p.add_argument("--exp-weight-scale", type=float, default=0.0, help="0 disables exponential weighting")
     p.add_argument("--exp-weight-gamma", type=float, default=6.0, help="Exponent strength for dose weighting")
+    p.add_argument(
+        "--decay-exp-alpha",
+        type=float,
+        default=0.0,
+        help="Article-style decaying exponential voxel weight alpha (e.g., 3.0)",
+    )
     p.add_argument("--checkpoint-dir", type=str, default="checkpoints/dota")
     p.add_argument("--require-cuda", action="store_true", help="Fail if CUDA is not available")
     return p
@@ -167,6 +173,7 @@ def main() -> None:
         pdd_loss_weight=args.pdd_loss_weight,
         exp_weight_scale=args.exp_weight_scale,
         exp_weight_gamma=args.exp_weight_gamma,
+        decay_exp_alpha=args.decay_exp_alpha,
     )
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
@@ -197,6 +204,7 @@ def main() -> None:
                 "default_energy_mev": args.default_energy_mev,
                 "exp_weight_scale": args.exp_weight_scale,
                 "exp_weight_gamma": args.exp_weight_gamma,
+                "decay_exp_alpha": args.decay_exp_alpha,
             },
             last_path,
         )
@@ -220,6 +228,7 @@ def main() -> None:
                     "default_energy_mev": args.default_energy_mev,
                     "exp_weight_scale": args.exp_weight_scale,
                     "exp_weight_gamma": args.exp_weight_gamma,
+                    "decay_exp_alpha": args.decay_exp_alpha,
                 },
                 best_path,
             )

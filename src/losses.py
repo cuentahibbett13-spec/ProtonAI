@@ -12,12 +12,14 @@ class WeightedMSEBraggLoss(nn.Module):
         high_dose_weight: float = 4.0,
         exp_weight_scale: float = 0.0,
         exp_weight_gamma: float = 6.0,
+        decay_exp_alpha: float = 0.0,
     ):
         super().__init__()
         self.threshold_ratio = threshold_ratio
         self.high_dose_weight = high_dose_weight
         self.exp_weight_scale = exp_weight_scale
         self.exp_weight_gamma = exp_weight_gamma
+        self.decay_exp_alpha = decay_exp_alpha
 
     def forward(self, prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         if prediction.shape != target.shape:
@@ -34,6 +36,12 @@ class WeightedMSEBraggLoss(nn.Module):
             exp_term = exp_term / max(math.exp(self.exp_weight_gamma) - 1.0, 1e-8)
             weights = weights * (1.0 + self.exp_weight_scale * exp_term)
 
+        if self.decay_exp_alpha > 0.0:
+            avg_norm = 0.5 * (prediction + target) / torch.clamp(max_per_sample, min=1e-8)
+            avg_norm = torch.clamp(avg_norm, min=0.0, max=1.0)
+            decay_weights = torch.exp(-self.decay_exp_alpha * (1.0 - avg_norm))
+            weights = weights * decay_weights
+
         squared_error = (prediction - target) ** 2
         weighted_error = squared_error * weights
         return weighted_error.mean()
@@ -47,6 +55,7 @@ class WeightedMSEWithPDDLoss(nn.Module):
         pdd_loss_weight: float = 0.0,
         exp_weight_scale: float = 0.0,
         exp_weight_gamma: float = 6.0,
+        decay_exp_alpha: float = 0.0,
     ):
         super().__init__()
         self.base = WeightedMSEBraggLoss(
@@ -54,6 +63,7 @@ class WeightedMSEWithPDDLoss(nn.Module):
             high_dose_weight=high_dose_weight,
             exp_weight_scale=exp_weight_scale,
             exp_weight_gamma=exp_weight_gamma,
+            decay_exp_alpha=decay_exp_alpha,
         )
         self.pdd_loss_weight = pdd_loss_weight
 
