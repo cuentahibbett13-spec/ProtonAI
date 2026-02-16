@@ -187,6 +187,7 @@ bash scripts/submit_cluster_bootstrap.sh
 
 ```bash
 TRAIN_HOM=20 VAL_HOM=5 TRAIN_CHG=40 VAL_CHG=10 NOISY=30000 TARGET=300000 \
+ENERGY_MIN_MEV=70 ENERGY_MAX_MEV=250 ENERGY_STEP_MEV=10 \
 SBATCH_PARTITION=gpu SBATCH_TIME=24:00:00 SBATCH_GRES=gpu:1 \
 bash scripts/submit_cluster_bootstrap.sh
 ```
@@ -196,11 +197,39 @@ Esto genera:
 - simulaciones y MHD en `data/gate/pdd_bootstrap_cluster/*`
 - dataset NPZ en `data/dataset_pdd_bootstrap_cluster/{train,val}`
 
+Nota: el manifiesto incluye `energy_mev` por caso (barrido 70–250 MeV por defecto en pasos de 10), y cada NPZ guarda ese metadato como `energy_mev`.
+
 Scripts clave:
 - `src/build_cluster_manifest.py`: crea el manifiesto
 - `src/run_cluster_case.py`: ejecuta un caso por `task-id`
 - `scripts/slurm_sim_array.sh`: worker del array
 - `scripts/submit_cluster_bootstrap.sh`: launcher completo
+
+Puedes limitar paralelismo para no saturar el cluster:
+
+```bash
+SBATCH_ARRAY_MAX_PARALLEL=20 bash scripts/submit_cluster_bootstrap.sh
+```
+
+## DoTA (secuencia causal) - inicio de migración
+
+Se agregó una primera implementación de arquitectura secuencial inspirada en DoTA:
+- `src/model_dota.py`: encoder 2D por slice + Transformer causal por profundidad + token de energía.
+- `src/dataset_sequence.py`: dataset secuencial (`CT/densidad`, energía, dosis target).
+- `src/train_dota.py`: entrenamiento end-to-end de DoTA.
+
+Ejemplo de entrenamiento (crop recomendado para memoria):
+
+```bash
+python3 -m src.train_dota \
+  --train-dir data/dataset_pdd_bootstrap/train \
+  --val-dir data/dataset_pdd_bootstrap/val \
+  --epochs 10 \
+  --batch-size 1 \
+  --crop-shape 128,24,24 \
+  --d-model 128 \
+  --num-layers 4
+```
 
 ## Notas ROCm
 - En ROCm, PyTorch suele exponer GPU como `cuda`.

@@ -13,6 +13,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--val-cases", type=int, default=1)
     parser.add_argument("--noisy-primaries", type=int, default=20_000)
     parser.add_argument("--target-primaries", type=int, default=200_000)
+    parser.add_argument("--energy-mev", type=float, default=150.0)
     parser.add_argument("--phantom-dir", type=str, default="data/phantom")
     parser.add_argument("--gate-output-root", type=str, default="data/gate/stage1_homogeneous")
     parser.add_argument("--dataset-root", type=str, default="data/dataset_stage1_homogeneous")
@@ -47,6 +48,8 @@ def main() -> None:
             str(args.noisy_primaries),
             "--target-primaries",
             str(args.target_primaries),
+            "--energy-mev",
+            str(args.energy_mev),
             "--phantom-mhd",
             f"{args.phantom_dir}/homogeneous_labels.mhd",
             "--labels-to-materials",

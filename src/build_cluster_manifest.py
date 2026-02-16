@@ -21,6 +21,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--change-min-ratio", type=float, default=0.35)
     parser.add_argument("--change-max-ratio", type=float, default=0.65)
     parser.add_argument("--change-materials", type=str, default="CORTICAL_BONE_1850,LUNG_0200")
+    parser.add_argument("--energy-min-mev", type=float, default=70.0)
+    parser.add_argument("--energy-max-mev", type=float, default=250.0)
+    parser.add_argument("--energy-step-mev", type=float, default=10.0)
     parser.add_argument("--phantom-root", type=str, default="data/phantoms_pdd_bootstrap")
     parser.add_argument("--manifest", type=str, default="data/manifests/pdd_bootstrap_manifest.csv")
     return parser
@@ -35,6 +38,24 @@ def main() -> None:
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
 
     rows = []
+
+    if args.energy_step_mev <= 0:
+        raise ValueError("--energy-step-mev must be > 0")
+    energies = []
+    e = args.energy_min_mev
+    while e <= args.energy_max_mev + 1e-6:
+        energies.append(round(e, 6))
+        e += args.energy_step_mev
+    if not energies:
+        raise ValueError("Empty energy list. Check min/max/step.")
+
+    case_counter = 0
+
+    def next_energy() -> float:
+        nonlocal case_counter
+        val = energies[case_counter % len(energies)]
+        case_counter += 1
+        return val
 
     hom_root = phantom_root / "homogeneous"
     hom_root.mkdir(parents=True, exist_ok=True)
@@ -51,6 +72,7 @@ def main() -> None:
             hom_phantom,
             hom_map,
             hom_density,
+            next_energy(),
         ])
 
     for i in range(args.val_hom_cases):
@@ -60,6 +82,7 @@ def main() -> None:
             hom_phantom,
             hom_map,
             hom_density,
+            next_energy(),
         ])
 
     materials = [m.strip() for m in args.change_materials.split(",") if m.strip()]
@@ -89,6 +112,7 @@ def main() -> None:
             labels_mhd,
             labels_map,
             density_mhd,
+            next_energy(),
         ])
 
     for i in range(args.val_change_cases):
@@ -109,11 +133,21 @@ def main() -> None:
             labels_mhd,
             labels_map,
             density_mhd,
+            next_energy(),
         ])
 
     with manifest_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["split", "case_name", "phantom_mhd", "labels_to_materials", "density_map_mhd"])
+        writer.writerow(
+            [
+                "split",
+                "case_name",
+                "phantom_mhd",
+                "labels_to_materials",
+                "density_map_mhd",
+                "energy_mev",
+            ]
+        )
         writer.writerows(rows)
 
     print(f"Manifest saved: {manifest_path}")

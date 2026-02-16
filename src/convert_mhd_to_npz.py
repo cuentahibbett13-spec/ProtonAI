@@ -61,7 +61,13 @@ def read_mhd_volume(mhd_path: str) -> Tuple[np.ndarray, np.ndarray]:
     return volume.astype(np.float32), spacing
 
 
-def convert_to_npz(noisy_mhd: str, target_mhd: str, density_mhd: str, output_npz: str) -> None:
+def convert_to_npz(
+    noisy_mhd: str,
+    target_mhd: str,
+    density_mhd: str,
+    output_npz: str,
+    energy_mev: float | None = None,
+) -> None:
     noisy_dose, spacing_noisy = read_mhd_volume(noisy_mhd)
     target_dose, spacing_target = read_mhd_volume(target_mhd)
     density, spacing_density = read_mhd_volume(density_mhd)
@@ -79,13 +85,16 @@ def convert_to_npz(noisy_mhd: str, target_mhd: str, density_mhd: str, output_npz
     output_path = Path(output_npz)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    np.savez_compressed(
-        output_path,
-        noisy_dose=noisy_dose,
-        target_dose=target_dose,
-        density=density,
-        spacing=spacing_noisy,
-    )
+    payload = {
+        "noisy_dose": noisy_dose,
+        "target_dose": target_dose,
+        "density": density,
+        "spacing": spacing_noisy,
+    }
+    if energy_mev is not None:
+        payload["energy_mev"] = np.array([float(energy_mev)], dtype=np.float32)
+
+    np.savez_compressed(output_path, **payload)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -94,6 +103,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target-dose-mhd", required=True, type=str)
     parser.add_argument("--density-mhd", required=True, type=str)
     parser.add_argument("--output", required=True, type=str)
+    parser.add_argument("--energy-mev", type=float, default=None)
     return parser
 
 
@@ -104,6 +114,7 @@ def main() -> None:
         target_mhd=args.target_dose_mhd,
         density_mhd=args.density_mhd,
         output_npz=args.output,
+        energy_mev=args.energy_mev,
     )
     print(f"Saved {args.output}")
 

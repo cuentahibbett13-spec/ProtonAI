@@ -11,6 +11,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--density-map-mhd", type=str, default="data/phantom/sandwich_density.mhd")
     parser.add_argument("--noisy-primaries", type=int, default=1_000_000)
     parser.add_argument("--target-primaries", type=int, default=50_000_000)
+    parser.add_argument("--energy-mev", type=float, default=150.0)
     parser.add_argument("--noisy-dose", type=str, default="data/gate/noisy_dose.mhd")
     parser.add_argument("--target-dose", type=str, default="data/gate/target_dose.mhd")
     parser.add_argument("--density", type=str, default="data/gate/density_map.mhd")
@@ -28,6 +29,7 @@ def main() -> None:
         output_density=args.density,
         density_map_mhd=args.density_map_mhd,
         primaries=args.noisy_primaries,
+        energy_mev=args.energy_mev,
     )
 
     run_simulation(
@@ -38,6 +40,7 @@ def main() -> None:
         output_density=args.density,
         density_map_mhd=args.density_map_mhd,
         primaries=args.target_primaries,
+        energy_mev=args.energy_mev,
     )
 
     print("Both simulations completed.")

@@ -38,6 +38,7 @@ def main() -> None:
         raise ValueError(f"task-id out of range: {args.task_id}, expected 1..{len(rows)}")
 
     row = rows[args.task_id - 1]
+    energy_mev = float(row.get("energy_mev", 150.0))
 
     run_case(
         split=row["split"],
@@ -47,12 +48,15 @@ def main() -> None:
         density_map_mhd=row["density_map_mhd"],
         noisy_primaries=args.noisy_primaries,
         target_primaries=args.target_primaries,
+        energy_mev=energy_mev,
         material_db=args.material_db,
         gate_output_root=Path(args.gate_output_root),
         dataset_root=Path(args.dataset_root),
     )
 
-    print(f"Completed task-id={args.task_id}, case={row['case_name']}, split={row['split']}")
+    print(
+        f"Completed task-id={args.task_id}, case={row['case_name']}, split={row['split']}, energy_mev={energy_mev}"
+    )
 
 
 if __name__ == "__main__":

@@ -68,6 +68,7 @@ def run_simulation(
     output_density: str,
     density_map_mhd: str,
     primaries: int,
+    energy_mev: float,
 ) -> None:
     gate = _import_gate()
     u = gate.g4_units
@@ -101,7 +102,7 @@ def run_simulation(
     source.direction.type = "momentum"
     source.direction.momentum = [0, 0, 1]
     source.energy.type = "mono"
-    source.energy.mono = 150.0 * u.MeV
+    source.energy.mono = float(energy_mev) * u.MeV
 
     dose = sim.add_actor("DoseActor", "dose")
     dose.attached_to = "phantom"
@@ -133,6 +134,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-density", type=str, default="data/gate/density_map.mhd")
     parser.add_argument("--density-map-mhd", type=str, default="data/phantom/sandwich_density.mhd")
     parser.add_argument("--primaries", type=int, required=True)
+    parser.add_argument("--energy-mev", type=float, default=150.0)
     return parser
 
 
@@ -150,9 +152,12 @@ def main() -> None:
         output_density=args.output_density,
         density_map_mhd=args.density_map_mhd,
         primaries=args.primaries,
+        energy_mev=args.energy_mev,
     )
 
-    print(f"Simulation complete: dose={args.output_dose}, density={args.output_density}")
+    print(
+        f"Simulation complete: dose={args.output_dose}, density={args.output_density}, energy_mev={args.energy_mev}"
+    )
 
 
 if __name__ == "__main__":

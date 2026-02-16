@@ -47,6 +47,7 @@ def run_simulation_subprocess(
     output_density: str,
     density_map_mhd: str,
     primaries: int,
+    energy_mev: float,
 ) -> None:
     cmd = [
         sys.executable,
@@ -66,6 +67,8 @@ def run_simulation_subprocess(
         density_map_mhd,
         "--primaries",
         str(primaries),
+        "--energy-mev",
+        str(energy_mev),
     ]
     subprocess.run(cmd, check=True)
 
@@ -121,6 +124,7 @@ def run_case(
     density_map_mhd: str,
     noisy_primaries: int,
     target_primaries: int,
+    energy_mev: float,
     material_db: str,
     gate_output_root: Path,
     dataset_root: Path,
@@ -140,6 +144,7 @@ def run_case(
         output_density=str(density_mhd),
         density_map_mhd=density_map_mhd,
         primaries=noisy_primaries,
+        energy_mev=energy_mev,
     )
 
     run_simulation_subprocess(
@@ -150,6 +155,7 @@ def run_case(
         output_density=str(density_mhd),
         density_map_mhd=density_map_mhd,
         primaries=target_primaries,
+        energy_mev=energy_mev,
     )
 
     npz_split = dataset_root / split
@@ -160,8 +166,9 @@ def run_case(
         target_mhd=str(target_mhd),
         density_mhd=str(density_mhd),
         output_npz=str(out_npz),
+        energy_mev=energy_mev,
     )
-    print(f"[{split}] {case_name} -> {out_npz}")
+    print(f"[{split}] {case_name} (energy={energy_mev:.1f} MeV) -> {out_npz}")
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -172,6 +179,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--val-change-cases", type=int, default=3)
     parser.add_argument("--noisy-primaries", type=int, default=20_000)
     parser.add_argument("--target-primaries", type=int, default=200_000)
+    parser.add_argument("--energy-mev", type=float, default=150.0)
     parser.add_argument("--size", type=int, default=128)
     parser.add_argument("--voxel-mm", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
@@ -214,6 +222,7 @@ def main() -> None:
             density_map_mhd=hom_density,
             noisy_primaries=args.noisy_primaries,
             target_primaries=args.target_primaries,
+            energy_mev=args.energy_mev,
             material_db=args.material_db,
             gate_output_root=Path(args.gate_output_root),
             dataset_root=Path(args.dataset_root),
@@ -228,6 +237,7 @@ def main() -> None:
             density_map_mhd=hom_density,
             noisy_primaries=args.noisy_primaries,
             target_primaries=args.target_primaries,
+            energy_mev=args.energy_mev,
             material_db=args.material_db,
             gate_output_root=Path(args.gate_output_root),
             dataset_root=Path(args.dataset_root),
@@ -266,6 +276,7 @@ def main() -> None:
             density_map_mhd=density_mhd,
             noisy_primaries=args.noisy_primaries,
             target_primaries=args.target_primaries,
+            energy_mev=args.energy_mev,
             material_db=args.material_db,
             gate_output_root=Path(args.gate_output_root),
             dataset_root=Path(args.dataset_root),
@@ -292,6 +303,7 @@ def main() -> None:
             density_map_mhd=density_mhd,
             noisy_primaries=args.noisy_primaries,
             target_primaries=args.target_primaries,
+            energy_mev=args.energy_mev,
             material_db=args.material_db,
             gate_output_root=Path(args.gate_output_root),
             dataset_root=Path(args.dataset_root),
