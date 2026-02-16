@@ -5,6 +5,12 @@ from typing import Optional
 import torch
 from torch.utils.data import DataLoader
 
+try:
+    from tqdm import tqdm
+except Exception:
+    def tqdm(iterable, **kwargs):
+        return iterable
+
 from .dataset_sequence import SequenceDoseDataset
 from .losses import WeightedMSEWithPDDLoss
 from .model_dota import DoTAModel
@@ -23,7 +29,7 @@ def parse_crop_shape(text: Optional[str]):
     return tuple(parts)
 
 
-def run_epoch(model, loader, optimizer, criterion, device, training: bool) -> float:
+def run_epoch(model, loader, optimizer, criterion, device, training: bool, epoch: int) -> float:
     if training:
         model.train()
     else:
@@ -32,7 +38,10 @@ def run_epoch(model, loader, optimizer, criterion, device, training: bool) -> fl
     running_loss = 0.0
     n = 0
 
-    for ct, energy, target in loader:
+    phase = "train" if training else "val"
+    progress = tqdm(loader, desc=f"Epoch {epoch:03d} [{phase}]", leave=False)
+
+    for ct, energy, target in progress:
         ct = ct.to(device, non_blocking=True)
         energy = energy.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
@@ -49,6 +58,7 @@ def run_epoch(model, loader, optimizer, criterion, device, training: bool) -> fl
 
         running_loss += float(loss.item())
         n += 1
+        progress.set_postfix(loss=f"{running_loss / max(n, 1):.6f}")
 
     return running_loss / max(n, 1)
 
@@ -136,8 +146,8 @@ def main() -> None:
     print(f"Using device: {device}")
 
     for epoch in range(1, args.epochs + 1):
-        train_loss = run_epoch(model, train_loader, optimizer, criterion, device, training=True)
-        val_loss = run_epoch(model, val_loader, optimizer, criterion, device, training=False)
+        train_loss = run_epoch(model, train_loader, optimizer, criterion, device, training=True, epoch=epoch)
+        val_loss = run_epoch(model, val_loader, optimizer, criterion, device, training=False, epoch=epoch)
         print(f"Epoch {epoch:03d} | train_loss={train_loss:.6f} | val_loss={val_loss:.6f}")
 
         last_path = ckpt_dir / "last.pt"
