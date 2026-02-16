@@ -4,9 +4,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-VENV_PATH="${VENV_PATH:-$ROOT_DIR/.venv}"
-source "$VENV_PATH/bin/activate"
-
 # Dataset size (atomic beamlets)
 export TRAIN_HOM="${TRAIN_HOM:-20}"
 export VAL_HOM="${VAL_HOM:-5}"
@@ -35,7 +32,7 @@ export SBATCH_CPUS="${SBATCH_CPUS:-4}"
 export SBATCH_MEM="${SBATCH_MEM:-16G}"
 export SBATCH_GRES="${SBATCH_GRES:-}"
 export SBATCH_ARRAY_MAX_PARALLEL="${SBATCH_ARRAY_MAX_PARALLEL:-20}"
-export SBATCH_JOB_NAME="${SBATCH_JOB_NAME:-protonai-yuca-atomic}"
+export SBATCH_JOB_NAME="${SBATCH_JOB_NAME:-proton-sweep-70-250mev}"
 
 # Optional Yuca-specific fields
 export SBATCH_ACCOUNT="${SBATCH_ACCOUNT:-}"
