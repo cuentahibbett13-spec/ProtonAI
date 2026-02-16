@@ -29,11 +29,11 @@ export GATE_OUT="${GATE_OUT:-data/gate/yuca_atomic_sweep}"
 export DATASET_OUT="${DATASET_OUT:-data/dataset_yuca_atomic_sweep}"
 
 # Cluster policy (override with env vars as needed)
-export SBATCH_PARTITION="${SBATCH_PARTITION:-gpu}"
+export SBATCH_PARTITION="${SBATCH_PARTITION:-cpu}"
 export SBATCH_TIME="${SBATCH_TIME:-24:00:00}"
 export SBATCH_CPUS="${SBATCH_CPUS:-4}"
 export SBATCH_MEM="${SBATCH_MEM:-16G}"
-export SBATCH_GRES="${SBATCH_GRES:-gpu:1}"
+export SBATCH_GRES="${SBATCH_GRES:-}"
 export SBATCH_ARRAY_MAX_PARALLEL="${SBATCH_ARRAY_MAX_PARALLEL:-20}"
 export SBATCH_JOB_NAME="${SBATCH_JOB_NAME:-protonai-yuca-atomic}"
 

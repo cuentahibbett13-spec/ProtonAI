@@ -65,9 +65,12 @@ SBATCH_ARGS=(
   --time "$SBATCH_TIME" \
   --cpus-per-task "$SBATCH_CPUS" \
   --mem "$SBATCH_MEM" \
-  --gres "$SBATCH_GRES" \
   --array "$ARRAY_SPEC"
 )
+
+if [[ -n "$SBATCH_GRES" ]]; then
+  SBATCH_ARGS+=(--gres "$SBATCH_GRES")
+fi
 
 if [[ -n "$SBATCH_ACCOUNT" ]]; then
   SBATCH_ARGS+=(--account "$SBATCH_ACCOUNT")
