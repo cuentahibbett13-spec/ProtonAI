@@ -218,6 +218,13 @@ SBATCH_ARRAY_MAX_PARALLEL=20 bash scripts/submit_cluster_bootstrap.sh
 bash scripts/submit_yuca_atomic_sweep.sh
 ```
 
+Por defecto los scripts de cluster intentan usar `../Modular3/.venv` y, si no existe, hacen fallback a `.venv`.
+Puedes fijar uno explícito con:
+
+```bash
+VENV_PATH=../Modular3/.venv bash scripts/submit_yuca_atomic_sweep.sh
+```
+
 Con cuenta/QOS/constraint del clúster:
 
 ```bash
