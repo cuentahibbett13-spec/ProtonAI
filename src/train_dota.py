@@ -83,7 +83,8 @@ def run_epoch(model, loader, optimizer, criterion, device, training: bool, epoch
 
         running_loss += float(loss.item())
         n += 1
-        progress.set_postfix(loss=f"{running_loss / max(n, 1):.6f}")
+        if hasattr(progress, "set_postfix"):
+            progress.set_postfix(loss=f"{running_loss / max(n, 1):.6f}")
 
     return running_loss / max(n, 1)
 
