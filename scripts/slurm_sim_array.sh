@@ -34,6 +34,7 @@ elif [[ -f "$ROOT_DIR/.venv/bin/activate" ]]; then
 fi
 
 echo "[task ${SLURM_ARRAY_TASK_ID}] host=$(hostname) pwd=$PWD"
+echo "[task ${SLURM_ARRAY_TASK_ID}] venv=${VENV_PATH:-${VIRTUAL_ENV:-<none>}}"
 echo "[task ${SLURM_ARRAY_TASK_ID}] python=$(command -v python)"
 
 if ! python -c "import opengate" >/dev/null 2>&1; then

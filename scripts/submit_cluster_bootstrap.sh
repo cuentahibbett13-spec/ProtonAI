@@ -4,8 +4,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-VENV_PATH="${VENV_PATH:-$ROOT_DIR/.venv}"
+VENV_PATH="${VENV_PATH:-${VIRTUAL_ENV:-$ROOT_DIR/.venv}}"
+if [[ ! -f "$VENV_PATH/bin/activate" ]]; then
+  echo "Python environment not found at: $VENV_PATH"
+  echo "Set VENV_PATH=/path/to/venv and rerun."
+  exit 1
+fi
 source "$VENV_PATH/bin/activate"
+export VENV_PATH
 
 MANIFEST="${MANIFEST:-data/manifests/pdd_bootstrap_manifest.csv}"
 PHANTOM_ROOT="${PHANTOM_ROOT:-data/phantoms_pdd_bootstrap_cluster}"
@@ -74,6 +80,7 @@ fi
 SBATCH_ARGS=(
   --job-name "$SBATCH_JOB_NAME" \
   --chdir "$ROOT_DIR" \
+  --export "ALL,VENV_PATH=$VENV_PATH" \
   --time "$SBATCH_TIME" \
   --cpus-per-task "$SBATCH_CPUS" \
   --mem "$SBATCH_MEM" \
