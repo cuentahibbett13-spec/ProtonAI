@@ -44,6 +44,7 @@ class SequenceDoseDataset(Dataset):
         sample_path = self.files[index]
         data = np.load(sample_path)
 
+        noisy_dose = data["noisy_dose"].astype(np.float32)
         target_dose = data["target_dose"].astype(np.float32)
         density = data["density"].astype(np.float32)
 
@@ -53,11 +54,13 @@ class SequenceDoseDataset(Dataset):
             ct_like = density
 
         if self.crop_shape is not None:
+            noisy_dose = self._center_crop_3d(noisy_dose, self.crop_shape)
             target_dose = self._center_crop_3d(target_dose, self.crop_shape)
             ct_like = self._center_crop_3d(ct_like, self.crop_shape)
 
         max_target = float(target_dose.max())
         if max_target > 0.0:
+            noisy_dose = noisy_dose / max_target
             target_dose = target_dose / max_target
 
         ct_scale = max(float(np.max(np.abs(ct_like))), 1.0)
@@ -68,8 +71,8 @@ class SequenceDoseDataset(Dataset):
         else:
             energy_mev = self.default_energy_mev
 
-        ct_tensor = torch.from_numpy(ct_like).unsqueeze(0)
+        input_tensor = torch.from_numpy(np.stack([noisy_dose, ct_like], axis=0))
         target_tensor = torch.from_numpy(target_dose).unsqueeze(0)
         energy_tensor = torch.tensor([energy_mev], dtype=torch.float32)
 
-        return ct_tensor, energy_tensor, target_tensor
+        return input_tensor, energy_tensor, target_tensor

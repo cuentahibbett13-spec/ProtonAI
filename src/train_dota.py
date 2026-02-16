@@ -96,6 +96,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--batch-size", type=int, default=1)
     p.add_argument("--num-workers", type=int, default=2)
     p.add_argument("--lr", type=float, default=1e-4)
+    p.add_argument("--in-channels", type=int, default=2)
     p.add_argument("--feat-channels", type=int, default=32)
     p.add_argument("--d-model", type=int, default=128)
     p.add_argument("--nhead", type=int, default=8)
@@ -158,7 +159,7 @@ def main() -> None:
         raise RuntimeError("CUDA is required (--require-cuda) but no GPU is available")
 
     model = DoTAModel(
-        in_channels=1,
+        in_channels=args.in_channels,
         feat_channels=args.feat_channels,
         d_model=args.d_model,
         nhead=args.nhead,
@@ -194,6 +195,7 @@ def main() -> None:
                 "epoch": epoch,
                 "model_state_dict": model.state_dict(),
                 "arch": "dota",
+                "in_channels": args.in_channels,
                 "feat_channels": args.feat_channels,
                 "d_model": args.d_model,
                 "nhead": args.nhead,
@@ -218,6 +220,7 @@ def main() -> None:
                     "model_state_dict": model.state_dict(),
                     "val_loss": val_loss,
                     "arch": "dota",
+                    "in_channels": args.in_channels,
                     "feat_channels": args.feat_channels,
                     "d_model": args.d_model,
                     "nhead": args.nhead,

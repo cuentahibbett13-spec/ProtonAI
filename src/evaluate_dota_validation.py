@@ -123,7 +123,7 @@ def main() -> None:
     checkpoint = torch.load(args.checkpoint, map_location=device)
 
     model = DoTAModel(
-        in_channels=1,
+        in_channels=int(checkpoint.get("in_channels", 1)),
         feat_channels=int(checkpoint.get("feat_channels", 32)),
         d_model=int(checkpoint.get("d_model", 128)),
         nhead=int(checkpoint.get("nhead", 8)),
@@ -142,16 +142,19 @@ def main() -> None:
     with torch.no_grad():
         for npz_path in files:
             data = np.load(npz_path)
+            noisy = data["noisy_dose"].astype(np.float32)
             target = data["target_dose"].astype(np.float32)
             density = data["density"].astype(np.float32)
             spacing = data.get("spacing", np.array([1.0, 1.0, 1.0], dtype=np.float32)).astype(np.float32)
 
             if crop_shape is not None:
+                noisy = center_crop_3d(noisy, crop_shape)
                 target = center_crop_3d(target, crop_shape)
                 density = center_crop_3d(density, crop_shape)
 
             max_target = float(target.max())
             target_norm = target / max_target if max_target > 0 else target
+            noisy_norm = noisy / max_target if max_target > 0 else noisy
 
             ct_scale = max(float(np.max(np.abs(density))), 1.0)
             ct_like = density / ct_scale
@@ -161,7 +164,8 @@ def main() -> None:
             else:
                 energy_mev = default_energy
 
-            ct_t = torch.from_numpy(ct_like).unsqueeze(0).unsqueeze(0).to(device)
+            model_input = np.stack([noisy_norm, ct_like], axis=0)
+            ct_t = torch.from_numpy(model_input).unsqueeze(0).to(device)
             energy_t = torch.tensor([[energy_mev]], dtype=torch.float32, device=device)
 
             pred_norm = model(ct_t, energy_t).squeeze(0).squeeze(0).cpu().numpy()
