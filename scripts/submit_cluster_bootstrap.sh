@@ -59,6 +59,18 @@ if [[ -n "$SBATCH_ARRAY_MAX_PARALLEL" ]]; then
   ARRAY_SPEC="1-$N_CASES%$SBATCH_ARRAY_MAX_PARALLEL"
 fi
 
+if [[ -z "$SBATCH_PARTITION" ]]; then
+  if command -v sinfo >/dev/null 2>&1; then
+    SBATCH_PARTITION="$(sinfo -h -o "%P" | awk '{gsub(/\*/, "", $1); if ($1 != "") {print $1; exit}}')"
+  fi
+fi
+
+if [[ -z "$SBATCH_PARTITION" ]]; then
+  echo "Could not determine a valid SLURM partition automatically."
+  echo "Please rerun with SBATCH_PARTITION=<your_partition> (e.g. from: sinfo -h -o '%P')."
+  exit 1
+fi
+
 SBATCH_ARGS=(
   --job-name "$SBATCH_JOB_NAME" \
   --time "$SBATCH_TIME" \
@@ -67,9 +79,7 @@ SBATCH_ARGS=(
   --array "$ARRAY_SPEC"
 )
 
-if [[ -n "$SBATCH_PARTITION" ]]; then
-  SBATCH_ARGS+=(--partition "$SBATCH_PARTITION")
-fi
+SBATCH_ARGS+=(--partition "$SBATCH_PARTITION")
 
 if [[ -n "$SBATCH_GRES" ]]; then
   SBATCH_ARGS+=(--gres "$SBATCH_GRES")
