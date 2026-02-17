@@ -149,6 +149,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Article-style decaying exponential voxel weight alpha (e.g., 3.0)",
     )
     p.add_argument("--checkpoint-dir", type=str, default="checkpoints/dota")
+    p.add_argument("--resume-checkpoint", type=str, default=None, help="Path to checkpoint to continue training")
+    p.add_argument(
+        "--resume-optimizer",
+        action="store_true",
+        help="Restore optimizer state when resuming (if present in checkpoint)",
+    )
     p.add_argument("--require-cuda", action="store_true", help="Fail if CUDA is not available")
     return p
 
@@ -213,10 +219,29 @@ def main() -> None:
     ckpt_dir = Path(args.checkpoint_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
+    start_epoch = 1
     best_val = float("inf")
+
+    if args.resume_checkpoint:
+        resume_path = Path(args.resume_checkpoint)
+        if not resume_path.exists():
+            raise FileNotFoundError(f"Resume checkpoint not found: {resume_path}")
+
+        resume_ckpt = torch.load(resume_path, map_location=device)
+        model.load_state_dict(resume_ckpt["model_state_dict"])
+
+        start_epoch = int(resume_ckpt.get("epoch", 0)) + 1
+        if "val_loss" in resume_ckpt:
+            best_val = float(resume_ckpt["val_loss"])
+
+        if args.resume_optimizer and "optimizer_state_dict" in resume_ckpt:
+            optimizer.load_state_dict(resume_ckpt["optimizer_state_dict"])
+
+        print(f"Resumed from {resume_path} | start_epoch={start_epoch} | best_val={best_val:.6f}")
+
     print(f"Using device: {device}")
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(start_epoch, args.epochs + 1):
         train_loss = run_epoch(model, train_loader, optimizer, criterion, device, training=True, epoch=epoch)
         val_loss = run_epoch(model, val_loader, optimizer, criterion, device, training=False, epoch=epoch)
         print(f"Epoch {epoch:03d} | train_loss={train_loss:.6f} | val_loss={val_loss:.6f}")
@@ -226,6 +251,7 @@ def main() -> None:
             {
                 "epoch": epoch,
                 "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
                 "arch": "dota",
                 "in_channels": args.in_channels,
                 "feat_channels": args.feat_channels,
@@ -250,6 +276,7 @@ def main() -> None:
                 {
                     "epoch": epoch,
                     "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
                     "val_loss": val_loss,
                     "arch": "dota",
                     "in_channels": args.in_channels,
