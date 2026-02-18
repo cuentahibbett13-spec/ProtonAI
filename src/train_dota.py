@@ -149,6 +149,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Article-style decaying exponential voxel weight alpha (e.g., 3.0)",
     )
     p.add_argument("--checkpoint-dir", type=str, default="checkpoints/dota")
+    p.add_argument("--train-augment", action="store_true", help="Enable train-time data augmentation")
+    p.add_argument("--aug-flip-prob", type=float, default=0.0, help="Flip probability per transverse axis")
+    p.add_argument("--aug-density-jitter-std", type=float, default=0.0, help="Std for multiplicative density jitter")
+    p.add_argument("--aug-noisy-noise-std", type=float, default=0.0, help="Std of additive noise on normalized noisy dose")
+    p.add_argument("--aug-max-shift-vox", type=int, default=0, help="Max random shift in H/W axes (voxels)")
     p.add_argument("--resume-checkpoint", type=str, default=None, help="Path to checkpoint to continue training")
     p.add_argument(
         "--resume-optimizer",
@@ -169,6 +174,11 @@ def main() -> None:
         args.train_dir,
         crop_shape=crop_shape,
         default_energy_mev=args.default_energy_mev,
+        augment=args.train_augment,
+        aug_flip_prob=args.aug_flip_prob,
+        aug_density_jitter_std=args.aug_density_jitter_std,
+        aug_noisy_noise_std=args.aug_noisy_noise_std,
+        aug_max_shift_vox=args.aug_max_shift_vox,
     )
     val_ds = SequenceDoseDataset(
         args.val_dir,

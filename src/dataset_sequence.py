@@ -13,6 +13,11 @@ class SequenceDoseDataset(Dataset):
         use_density_as_ct: bool = True,
         crop_shape: Optional[Tuple[int, int, int]] = None,
         default_energy_mev: float = 150.0,
+        augment: bool = False,
+        aug_flip_prob: float = 0.0,
+        aug_density_jitter_std: float = 0.0,
+        aug_noisy_noise_std: float = 0.0,
+        aug_max_shift_vox: int = 0,
     ):
         self.root = Path(npz_dir)
         self.files: List[Path] = sorted(self.root.glob("*.npz"))
@@ -22,6 +27,11 @@ class SequenceDoseDataset(Dataset):
         self.use_density_as_ct = use_density_as_ct
         self.crop_shape = crop_shape
         self.default_energy_mev = float(default_energy_mev)
+        self.augment = bool(augment)
+        self.aug_flip_prob = float(max(0.0, aug_flip_prob))
+        self.aug_density_jitter_std = float(max(0.0, aug_density_jitter_std))
+        self.aug_noisy_noise_std = float(max(0.0, aug_noisy_noise_std))
+        self.aug_max_shift_vox = int(max(0, aug_max_shift_vox))
 
     def __len__(self) -> int:
         return len(self.files)
@@ -39,6 +49,50 @@ class SequenceDoseDataset(Dataset):
         w0 = (w - cw) // 2
 
         return volume[d0:d0 + cd, h0:h0 + ch, w0:w0 + cw]
+
+    @staticmethod
+    def _roll_with_zero_fill(volume: np.ndarray, shift: int, axis: int) -> np.ndarray:
+        if shift == 0:
+            return volume
+
+        rolled = np.roll(volume, shift=shift, axis=axis)
+        slicer = [slice(None), slice(None), slice(None)]
+        if shift > 0:
+            slicer[axis] = slice(0, shift)
+        else:
+            slicer[axis] = slice(shift, None)
+        rolled[tuple(slicer)] = 0.0
+        return rolled
+
+    def _apply_geometric_augment(
+        self,
+        noisy_dose: np.ndarray,
+        target_dose: np.ndarray,
+        ct_like: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        if self.aug_flip_prob > 0.0:
+            if np.random.rand() < self.aug_flip_prob:
+                noisy_dose = np.flip(noisy_dose, axis=1).copy()
+                target_dose = np.flip(target_dose, axis=1).copy()
+                ct_like = np.flip(ct_like, axis=1).copy()
+            if np.random.rand() < self.aug_flip_prob:
+                noisy_dose = np.flip(noisy_dose, axis=2).copy()
+                target_dose = np.flip(target_dose, axis=2).copy()
+                ct_like = np.flip(ct_like, axis=2).copy()
+
+        if self.aug_max_shift_vox > 0:
+            shift_h = int(np.random.randint(-self.aug_max_shift_vox, self.aug_max_shift_vox + 1))
+            shift_w = int(np.random.randint(-self.aug_max_shift_vox, self.aug_max_shift_vox + 1))
+
+            noisy_dose = self._roll_with_zero_fill(noisy_dose, shift_h, axis=1)
+            target_dose = self._roll_with_zero_fill(target_dose, shift_h, axis=1)
+            ct_like = self._roll_with_zero_fill(ct_like, shift_h, axis=1)
+
+            noisy_dose = self._roll_with_zero_fill(noisy_dose, shift_w, axis=2)
+            target_dose = self._roll_with_zero_fill(target_dose, shift_w, axis=2)
+            ct_like = self._roll_with_zero_fill(ct_like, shift_w, axis=2)
+
+        return noisy_dose, target_dose, ct_like
 
     def __getitem__(self, index: int):
         sample_path = self.files[index]
@@ -58,10 +112,26 @@ class SequenceDoseDataset(Dataset):
             target_dose = self._center_crop_3d(target_dose, self.crop_shape)
             ct_like = self._center_crop_3d(ct_like, self.crop_shape)
 
+        if self.augment:
+            noisy_dose, target_dose, ct_like = self._apply_geometric_augment(noisy_dose, target_dose, ct_like)
+
+            if self.aug_density_jitter_std > 0.0:
+                density_scale = 1.0 + float(np.random.normal(loc=0.0, scale=self.aug_density_jitter_std))
+                density_scale = max(0.8, min(1.2, density_scale))
+                ct_like = np.clip(ct_like * density_scale, a_min=0.0, a_max=None)
+
         max_target = float(target_dose.max())
         if max_target > 0.0:
             noisy_dose = noisy_dose / max_target
             target_dose = target_dose / max_target
+
+        if self.augment and self.aug_noisy_noise_std > 0.0:
+            noisy_dose = noisy_dose + np.random.normal(
+                loc=0.0,
+                scale=self.aug_noisy_noise_std,
+                size=noisy_dose.shape,
+            ).astype(np.float32)
+            noisy_dose = np.clip(noisy_dose, a_min=0.0, a_max=None)
 
         ct_scale = max(float(np.max(np.abs(ct_like))), 1.0)
         ct_like = ct_like / ct_scale
