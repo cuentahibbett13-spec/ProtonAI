@@ -3,6 +3,8 @@
 Input: (2, Z, Y, X) - [noisy_dose, density_map]
 Output: (1, Z, Y, X) - predicted_dose
 """
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
