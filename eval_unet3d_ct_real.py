@@ -12,6 +12,23 @@ from tqdm import tqdm
 from src.model_unet3d_clean import UNet3D
 
 
+def center_crop_or_pad(volume: np.ndarray, crop_shape):
+    z, y, x = volume.shape
+    cz, cy, cx = crop_shape
+
+    pad_z = max(0, cz - z)
+    pad_y = max(0, cy - y)
+    pad_x = max(0, cx - x)
+    if pad_z > 0 or pad_y > 0 or pad_x > 0:
+        volume = np.pad(volume, ((0, pad_z), (0, pad_y), (0, pad_x)), mode="constant", constant_values=0)
+        z, y, x = volume.shape
+
+    z0 = (z - cz) // 2
+    y0 = (y - cy) // 2
+    x0 = (x - cx) // 2
+    return volume[z0:z0 + cz, y0:y0 + cy, x0:x0 + cx]
+
+
 def evaluate_ct_real(checkpoint_path: str, ct_dir: str, output_dir: str = "outputs/unet3d_eval_ct"):
     """
     Evalúa UNet3D en CT real.
@@ -50,13 +67,16 @@ def evaluate_ct_real(checkpoint_path: str, ct_dir: str, output_dir: str = "outpu
             target = data["target_dose"].astype(np.float32)
             density = data["density"].astype(np.float32)
             
-            # Normalize
-            noisy_max = max(noisy.max(), 1e-6)
+            if crop_shape is not None:
+                noisy = center_crop_or_pad(noisy, crop_shape)
+                target = center_crop_or_pad(target, crop_shape)
+                density = center_crop_or_pad(density, crop_shape)
+
+            # Normalize (same convention as train_unet3d.py)
             target_max = max(target.max(), 1e-6)
             density_max = max(density.max(), 1e-6)
             
-            noisy_norm = noisy / noisy_max
-            target_norm = target / target_max
+            noisy_norm = noisy / target_max
             density_norm = density / density_max
             
             # Stack channels

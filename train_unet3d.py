@@ -19,29 +19,49 @@ from src.model_unet3d_clean import UNet3D
 class DoseDataset3D(Dataset):
     """Dataset simple de NPZ con cropping aleatorio."""
     
-    def __init__(self, data_dir: Path, crop_shape: Tuple[int, int, int] = (128, 128, 128)):
+    def __init__(
+        self,
+        data_dir: Path,
+        crop_shape: Tuple[int, int, int] = (128, 128, 128),
+        random_crop: bool = True,
+    ):
         self.npz_files = sorted(data_dir.glob("*.npz"))
         self.crop_shape = crop_shape
+        self.random_crop = random_crop
         
         if not self.npz_files:
             raise ValueError(f"No NPZ files in {data_dir}")
         
         print(f"Loaded {len(self.npz_files)} samples")
 
-    def _random_crop(self, volume: np.ndarray) -> np.ndarray:
-        """Random crop to crop_shape."""
-        shape = volume.shape
+    def _crop_or_pad_triplet(
+        self,
+        noisy: np.ndarray,
+        target: np.ndarray,
+        density: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Apply the same crop/pad to noisy, target and density to keep voxel alignment."""
+        shape = noisy.shape
+
+        if not (target.shape == shape and density.shape == shape):
+            raise ValueError(f"Shape mismatch in sample: noisy={shape}, target={target.shape}, density={density.shape}")
+
         if all(s >= c for s, c in zip(shape, self.crop_shape)):
-            starts = [np.random.randint(0, s - c + 1) for s, c in zip(shape, self.crop_shape)]
+            if self.random_crop:
+                starts = [np.random.randint(0, s - c + 1) for s, c in zip(shape, self.crop_shape)]
+            else:
+                starts = [(s - c) // 2 for s, c in zip(shape, self.crop_shape)]
             slices = tuple(slice(start, start + crop) for start, crop in zip(starts, self.crop_shape))
-            return volume[slices]
-        else:
-            # Pad if needed
-            pad_width = [(0, max(0, c - s)) for s, c in zip(shape, self.crop_shape)]
-            volume = np.pad(volume, pad_width, mode='constant', constant_values=0)
-            starts = [0] * len(self.crop_shape)
-            slices = tuple(slice(s, s + c) for s, c in zip(starts, self.crop_shape))
-            return volume[slices]
+            return noisy[slices], target[slices], density[slices]
+
+        pad_width = [(0, max(0, c - s)) for s, c in zip(shape, self.crop_shape)]
+        noisy_p = np.pad(noisy, pad_width, mode='constant', constant_values=0)
+        target_p = np.pad(target, pad_width, mode='constant', constant_values=0)
+        density_p = np.pad(density, pad_width, mode='constant', constant_values=0)
+
+        starts = [0] * len(self.crop_shape)
+        slices = tuple(slice(s, s + c) for s, c in zip(starts, self.crop_shape))
+        return noisy_p[slices], target_p[slices], density_p[slices]
 
     def __len__(self):
         return len(self.npz_files)
@@ -53,17 +73,13 @@ class DoseDataset3D(Dataset):
         target = npz["target_dose"].astype(np.float32)
         density = npz["density"].astype(np.float32)
         
-        # Random crop
-        noisy = self._random_crop(noisy)
-        target = self._random_crop(target)
-        density = self._random_crop(density)
+        noisy, target, density = self._crop_or_pad_triplet(noisy, target, density)
         
         # Normalize per volume
-        noisy_max = max(noisy.max(), 1e-6)
         target_max = max(target.max(), 1e-6)
         density_max = max(density.max(), 1e-6)
         
-        noisy = noisy / noisy_max
+        noisy = noisy / target_max
         target = target / target_max
         density = density / density_max
         
@@ -104,8 +120,8 @@ def main():
     print(f"Crop shape: {crop_shape}")
     
     # Datasets
-    train_dataset = DoseDataset3D(train_dir, crop_shape)
-    val_dataset = DoseDataset3D(val_dir, crop_shape)
+    train_dataset = DoseDataset3D(train_dir, crop_shape, random_crop=True)
+    val_dataset = DoseDataset3D(val_dir, crop_shape, random_crop=False)
     
     train_loader = DataLoader(
         train_dataset, 
