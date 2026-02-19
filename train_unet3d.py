@@ -15,8 +15,6 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 from src.model_unet3d_clean import UNet3D
-from src.model_unet3d_simple import UNet3D as SimpleUNet3D
-from src.model_unet3d import PhysicsAwareUNet3D
 
 
 def configure_rocm_runtime_dirs() -> None:
@@ -183,6 +181,12 @@ def main():
     if args.arch == "clean":
         model = UNet3D(in_channels=2, out_channels=1, base_filters=args.base_filters).to(device)
     elif args.arch == "simple":
+        try:
+            from src.model_unet3d_simple import UNet3D as SimpleUNet3D
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                "Architecture 'simple' requires src/model_unet3d_simple.py in this checkout"
+            ) from exc
         model = SimpleUNet3D(
             in_channels=2,
             out_channels=1,
@@ -190,6 +194,7 @@ def main():
             depth=args.depth,
         ).to(device)
     elif args.arch == "physics":
+        from src.model_unet3d import PhysicsAwareUNet3D
         model = PhysicsAwareUNet3D(
             in_channels=2,
             out_channels=1,
