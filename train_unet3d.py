@@ -15,6 +15,8 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 from src.model_unet3d_clean import UNet3D
+from src.model_unet3d_simple import UNet3D as SimpleUNet3D
+from src.model_unet3d import PhysicsAwareUNet3D
 
 
 def configure_rocm_runtime_dirs() -> None:
@@ -127,6 +129,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--crop-shape", type=str, default="128,128,128")
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
+    parser.add_argument("--arch", type=str, default="clean", choices=["clean", "simple", "physics"])
+    parser.add_argument("--base-filters", type=int, default=32)
+    parser.add_argument("--base-channels", type=int, default=32)
+    parser.add_argument("--depth", type=int, default=4)
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--num-workers", type=int, default=4)
     return parser
@@ -134,6 +141,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main():
     args = build_arg_parser().parse_args()
+
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
 
     configure_rocm_runtime_dirs()
     
@@ -168,7 +180,23 @@ def main():
     )
     
     # Model
-    model = UNet3D(in_channels=2, out_channels=1, base_filters=32).to(device)
+    if args.arch == "clean":
+        model = UNet3D(in_channels=2, out_channels=1, base_filters=args.base_filters).to(device)
+    elif args.arch == "simple":
+        model = SimpleUNet3D(
+            in_channels=2,
+            out_channels=1,
+            base_channels=args.base_channels,
+            depth=args.depth,
+        ).to(device)
+    elif args.arch == "physics":
+        model = PhysicsAwareUNet3D(
+            in_channels=2,
+            out_channels=1,
+            base_channels=args.base_channels,
+        ).to(device)
+    else:
+        raise ValueError(f"Unsupported architecture: {args.arch}")
     print(f"Total params: {sum(p.numel() for p in model.parameters()):,}")
     
     # Optimizer & Loss
@@ -231,10 +259,14 @@ def main():
     
     # Save config
     config = {
+        "arch": args.arch,
         "crop_shape": crop_shape,
         "in_channels": 2,
         "out_channels": 1,
-        "base_filters": 32,
+        "base_filters": args.base_filters,
+        "base_channels": args.base_channels,
+        "depth": args.depth,
+        "seed": args.seed,
         "epochs": args.epochs,
         "batch_size": args.batch_size,
         "lr": args.lr,
