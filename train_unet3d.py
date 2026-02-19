@@ -132,6 +132,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-channels", type=int, default=32)
     parser.add_argument("--depth", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--resume-checkpoint", type=str, default=None)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--num-workers", type=int, default=4)
     return parser
@@ -210,8 +211,22 @@ def main():
     
     # Training
     best_val_loss = float('inf')
-    
-    for epoch in range(args.epochs):
+    start_epoch = 0
+
+    if args.resume_checkpoint:
+        resume_path = Path(args.resume_checkpoint)
+        if not resume_path.exists():
+            raise FileNotFoundError(f"Resume checkpoint not found: {resume_path}")
+        resume_ckpt = torch.load(resume_path, map_location=device)
+        model.load_state_dict(resume_ckpt["model_state_dict"])
+        if "optimizer_state_dict" in resume_ckpt:
+            optimizer.load_state_dict(resume_ckpt["optimizer_state_dict"])
+        start_epoch = int(resume_ckpt.get("epoch", -1)) + 1
+        best_val_loss = float(resume_ckpt.get("best_val_loss", resume_ckpt.get("val_loss", float('inf'))))
+        print(f"Resuming from {resume_path} at epoch {start_epoch}/{args.epochs}")
+        print(f"Best val_loss so far: {best_val_loss:.6f}")
+
+    for epoch in range(start_epoch, args.epochs):
         # Train
         model.train()
         train_loss = 0.0
@@ -257,10 +272,21 @@ def main():
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "val_loss": val_loss,
+                "best_val_loss": best_val_loss,
                 "crop_shape": crop_shape,
             }
             torch.save(ckpt, output_dir / "best.pt")
             print(f"  → Saved best checkpoint (val_loss={val_loss:.6f})")
+
+        last_ckpt = {
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "val_loss": val_loss,
+            "best_val_loss": best_val_loss,
+            "crop_shape": crop_shape,
+        }
+        torch.save(last_ckpt, output_dir / "last.pt")
     
     # Save config
     config = {
