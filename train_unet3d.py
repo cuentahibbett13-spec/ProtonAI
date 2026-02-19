@@ -4,6 +4,7 @@ Entrenador para 3D UNet en dataset sintético (2400 muestras, variable crop).
 """
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Tuple
 
@@ -14,6 +15,32 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 from src.model_unet3d_clean import UNet3D
+
+
+def configure_rocm_runtime_dirs() -> None:
+    user = os.environ.get("USER", "user")
+
+    tmp_root = os.environ.get("TMPDIR")
+    if not tmp_root or not Path(tmp_root).exists():
+        slurm_tmp = os.environ.get("SLURM_TMPDIR")
+        if slurm_tmp and Path(slurm_tmp).exists():
+            tmp_root = slurm_tmp
+        else:
+            tmp_root = f"/tmp/{user}/protonai_tmp"
+    os.environ["TMPDIR"] = tmp_root
+    Path(tmp_root).mkdir(parents=True, exist_ok=True)
+
+    miopen_cache = os.environ.get("MIOPEN_CACHE_DIR")
+    if not miopen_cache:
+        miopen_cache = f"{tmp_root}/miopen_cache"
+        os.environ["MIOPEN_CACHE_DIR"] = miopen_cache
+    Path(miopen_cache).mkdir(parents=True, exist_ok=True)
+
+    miopen_user_db = os.environ.get("MIOPEN_USER_DB_PATH")
+    if not miopen_user_db:
+        miopen_user_db = f"{tmp_root}/miopen_user_db"
+        os.environ["MIOPEN_USER_DB_PATH"] = miopen_user_db
+    Path(miopen_user_db).mkdir(parents=True, exist_ok=True)
 
 
 class DoseDataset3D(Dataset):
@@ -107,6 +134,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main():
     args = build_arg_parser().parse_args()
+
+    configure_rocm_runtime_dirs()
     
     train_dir = Path(args.train_dir)
     val_dir = Path(args.val_dir)
