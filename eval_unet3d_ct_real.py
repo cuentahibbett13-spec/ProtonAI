@@ -9,8 +9,6 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from src.model_unet3d_clean import UNet3D
-
 
 def center_crop_or_pad(volume: np.ndarray, crop_shape):
     z, y, x = volume.shape
@@ -29,7 +27,13 @@ def center_crop_or_pad(volume: np.ndarray, crop_shape):
     return volume[z0:z0 + cz, y0:y0 + cy, x0:x0 + cx]
 
 
-def evaluate_ct_real(checkpoint_path: str, ct_dir: str, output_dir: str = "outputs/unet3d_eval_ct"):
+def evaluate_ct_real(
+    checkpoint_path: str,
+    ct_dir: str,
+    output_dir: str = "outputs/unet3d_eval_ct",
+    arch: str = "clean",
+    max_samples: int = 0,
+):
     """
     Evalúa UNet3D en CT real.
     Carga pares NPZ de CT: (noisy, target, density) y evalúa.
@@ -43,7 +47,27 @@ def evaluate_ct_real(checkpoint_path: str, ct_dir: str, output_dir: str = "outpu
     crop_shape = ckpt.get("crop_shape", (128, 128, 128))
     
     # Load model
-    model = UNet3D(in_channels=2, out_channels=1, base_filters=32).to(device)
+    if arch == "clean":
+        from src.model_unet3d_clean import UNet3D
+
+        model = UNet3D(in_channels=2, out_channels=1, base_filters=ckpt.get("base_filters", 32)).to(device)
+    elif arch == "simple":
+        from src.model_unet3d_simple import UNet3D as SimpleUNet3D
+
+        model = SimpleUNet3D(
+            in_channels=2,
+            out_channels=1,
+            base_channels=ckpt.get("base_channels", 32),
+            depth=ckpt.get("depth", 4),
+        ).to(device)
+    else:
+        from src.model_unet3d import PhysicsAwareUNet3D
+
+        model = PhysicsAwareUNet3D(
+            in_channels=2,
+            out_channels=1,
+            base_channels=ckpt.get("base_channels", 32),
+        ).to(device)
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
     
@@ -57,6 +81,8 @@ def evaluate_ct_real(checkpoint_path: str, ct_dir: str, output_dir: str = "outpu
     if not npz_files:
         print(f"No NPZ files found in {ct_dir}")
         return
+    if max_samples and max_samples > 0:
+        npz_files = npz_files[:max_samples]
     
     results = []
     
@@ -130,9 +156,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--ct-dir", type=str, required=True)
     parser.add_argument("--output-dir", type=str, default="outputs/unet3d_eval_ct")
+    parser.add_argument("--arch", type=str, default="clean", choices=["clean", "simple", "physics"])
+    parser.add_argument("--max-samples", type=int, default=0)
     return parser
 
 
 if __name__ == "__main__":
     args = build_arg_parser().parse_args()
-    evaluate_ct_real(args.checkpoint, args.ct_dir, args.output_dir)
+    evaluate_ct_real(args.checkpoint, args.ct_dir, args.output_dir, arch=args.arch, max_samples=args.max_samples)

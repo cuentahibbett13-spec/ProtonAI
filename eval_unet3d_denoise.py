@@ -7,8 +7,6 @@ import matplotlib
 import numpy as np
 import torch
 
-from src.model_unet3d_clean import UNet3D
-
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -112,6 +110,7 @@ def spacing_for_axis(spacing_xyz: np.ndarray, axis: str) -> float:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Evaluate UNet denoising: noisy vs prediction against target")
     parser.add_argument("--checkpoint", type=str, required=True)
+    parser.add_argument("--arch", type=str, default="clean", choices=["clean", "simple", "physics"])
     parser.add_argument("--val-dir", type=str, required=True)
     parser.add_argument("--output-dir", type=str, default="outputs/unet3d_denoise_eval")
     parser.add_argument("--max-samples", type=int, default=0, help="Evaluate only first N samples (0 = all)")
@@ -136,7 +135,28 @@ def main() -> None:
     if crop_shape is not None:
         crop_shape = tuple(crop_shape)
 
-    model = UNet3D(in_channels=2, out_channels=1, base_filters=32).to(device)
+    if args.arch == "clean":
+        from src.model_unet3d_clean import UNet3D
+
+        model = UNet3D(in_channels=2, out_channels=1, base_filters=ckpt.get("base_filters", 32)).to(device)
+    elif args.arch == "simple":
+        from src.model_unet3d_simple import UNet3D as SimpleUNet3D
+
+        model = SimpleUNet3D(
+            in_channels=2,
+            out_channels=1,
+            base_channels=ckpt.get("base_channels", 32),
+            depth=ckpt.get("depth", 4),
+        ).to(device)
+    else:
+        from src.model_unet3d import PhysicsAwareUNet3D
+
+        model = PhysicsAwareUNet3D(
+            in_channels=2,
+            out_channels=1,
+            base_channels=ckpt.get("base_channels", 32),
+        ).to(device)
+
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
 
