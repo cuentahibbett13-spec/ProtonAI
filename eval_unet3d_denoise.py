@@ -3,10 +3,14 @@ import argparse
 import os
 from pathlib import Path
 
+import matplotlib
 import numpy as np
 import torch
 
 from src.model_unet3d_clean import UNet3D
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 
 def configure_rocm_runtime_dirs() -> None:
@@ -73,12 +77,46 @@ def mae_masked(a: np.ndarray, b: np.ndarray, mask: np.ndarray) -> float:
     return float(np.mean(np.abs(a[mask] - b[mask])))
 
 
+def extract_profile(volume: np.ndarray, axis: str, center_a: int, center_b: int, window: int) -> np.ndarray:
+    if axis == "z":
+        y0, x0 = center_a, center_b
+        y1, y2 = max(0, y0 - window), min(volume.shape[1], y0 + window + 1)
+        x1, x2 = max(0, x0 - window), min(volume.shape[2], x0 + window + 1)
+        return volume[:, y1:y2, x1:x2].mean(axis=(1, 2))
+    if axis == "y":
+        z0, x0 = center_a, center_b
+        z1, z2 = max(0, z0 - window), min(volume.shape[0], z0 + window + 1)
+        x1, x2 = max(0, x0 - window), min(volume.shape[2], x0 + window + 1)
+        return volume[z1:z2, :, x1:x2].mean(axis=(0, 2))
+    z0, y0 = center_a, center_b
+    z1, z2 = max(0, z0 - window), min(volume.shape[0], z0 + window + 1)
+    y1, y2 = max(0, y0 - window), min(volume.shape[1], y0 + window + 1)
+    return volume[z1:z2, y1:y2, :].mean(axis=(0, 1))
+
+
+def normalize_pdd(profile: np.ndarray) -> np.ndarray:
+    peak = float(profile.max())
+    if peak <= 0.0:
+        return np.zeros_like(profile)
+    return (profile / peak) * 100.0
+
+
+def spacing_for_axis(spacing_xyz: np.ndarray, axis: str) -> float:
+    if axis == "x":
+        return float(spacing_xyz[0])
+    if axis == "y":
+        return float(spacing_xyz[1])
+    return float(spacing_xyz[2])
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Evaluate UNet denoising: noisy vs prediction against target")
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--val-dir", type=str, required=True)
     parser.add_argument("--output-dir", type=str, default="outputs/unet3d_denoise_eval")
     parser.add_argument("--max-samples", type=int, default=0, help="Evaluate only first N samples (0 = all)")
+    parser.add_argument("--axis", type=str, choices=["z", "y", "x"], default="z")
+    parser.add_argument("--window", type=int, default=1)
     return parser
 
 
@@ -90,6 +128,8 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    plots_dir = out_dir / "plots"
+    plots_dir.mkdir(parents=True, exist_ok=True)
 
     ckpt = torch.load(args.checkpoint, map_location=device)
     crop_shape = ckpt.get("crop_shape", (128, 128, 128))
@@ -114,6 +154,7 @@ def main() -> None:
             noisy = d["noisy_dose"].astype(np.float32)
             target = d["target_dose"].astype(np.float32)
             density = d["density"].astype(np.float32)
+            spacing = d.get("spacing", np.array([1.0, 1.0, 1.0], dtype=np.float32)).astype(np.float32)
 
             if crop_shape is not None:
                 noisy = center_crop_or_pad(noisy, crop_shape)
@@ -132,6 +173,39 @@ def main() -> None:
             pred_norm = model(x_t).squeeze(0).squeeze(0).cpu().numpy()
             pred = pred_norm * target_max
             pred_clipped = np.clip(pred, 0.0, target_max)
+
+            if args.axis == "z":
+                c_a = target.shape[1] // 2
+                c_b = target.shape[2] // 2
+            elif args.axis == "y":
+                c_a = target.shape[0] // 2
+                c_b = target.shape[2] // 2
+            else:
+                c_a = target.shape[0] // 2
+                c_b = target.shape[1] // 2
+
+            pdd_noisy = normalize_pdd(extract_profile(noisy, args.axis, c_a, c_b, args.window))
+            pdd_pred = normalize_pdd(extract_profile(pred, args.axis, c_a, c_b, args.window))
+            pdd_pred_clipped = normalize_pdd(extract_profile(pred_clipped, args.axis, c_a, c_b, args.window))
+            pdd_target = normalize_pdd(extract_profile(target, args.axis, c_a, c_b, args.window))
+
+            step_mm = spacing_for_axis(spacing, args.axis)
+            depth_mm = np.arange(pdd_target.shape[0], dtype=np.float32) * step_mm
+
+            fig_path = plots_dir / f"{f.stem}_pdd.png"
+            plt.figure(figsize=(8, 5))
+            plt.plot(depth_mm, pdd_noisy, label="Noisy", linewidth=1.6)
+            plt.plot(depth_mm, pdd_pred, label="Pred", linewidth=1.8)
+            plt.plot(depth_mm, pdd_pred_clipped, label="Pred clipped", linewidth=1.8)
+            plt.plot(depth_mm, pdd_target, label="Target", linewidth=1.8)
+            plt.xlabel("Depth [mm]")
+            plt.ylabel("PDD [%]")
+            plt.title(f"{f.stem}")
+            plt.grid(alpha=0.3)
+            plt.legend()
+            plt.tight_layout()
+            plt.savefig(fig_path, dpi=150)
+            plt.close()
 
             high_dose_mask = target >= (0.1 * target_max)
 
@@ -282,6 +356,7 @@ def main() -> None:
             f"mae_improvement_pct_clipped_hd_mean={improve_mae_clipped_hd_mean:.3f}",
             f"mae_clipped_hd_wins={wins_mae_clipped_hd}/{len(rows)}",
             f"summary_csv={csv_path}",
+            f"plots_dir={plots_dir}",
         ]
     )
 
