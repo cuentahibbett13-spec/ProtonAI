@@ -4,11 +4,15 @@ import csv
 import os
 from pathlib import Path
 
+import matplotlib
 import numpy as np
 import torch
 
 from swin_dose_mc.data import crop_or_pad_3d
 from swin_dose_mc.model import SwinDoseMC
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 
 def configure_rocm_runtime_dirs() -> None:
@@ -49,6 +53,11 @@ def extract_central_profile(volume: np.ndarray, axis: str = "z") -> np.ndarray:
     return volume[volume.shape[0] // 2, volume.shape[1] // 2, :]
 
 
+def normalize_profile(profile: np.ndarray) -> np.ndarray:
+    peak = max(float(np.max(profile)), 1e-6)
+    return (profile / peak) * 100.0
+
+
 def gamma_1d_pass_rate(ref: np.ndarray, eva: np.ndarray, step_mm: float, dose_pct: float, dist_mm: float) -> float:
     ref_max = max(float(np.max(ref)), 1e-6)
     dose_crit = (dose_pct / 100.0) * ref_max
@@ -71,6 +80,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--output-dir", type=str, default="outputs/swin_dose_mc_eval")
     p.add_argument("--max-samples", type=int, default=10)
     p.add_argument("--axis", type=str, choices=["z", "y", "x"], default="z")
+    p.add_argument("--save-plots", action="store_true")
     return p.parse_args()
 
 
@@ -97,6 +107,9 @@ def main() -> None:
 
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    plots_dir = out_dir / "plots"
+    if args.save_plots:
+        plots_dir.mkdir(parents=True, exist_ok=True)
 
     files = sorted(Path(args.val_dir).glob("*.npz"))
     if args.max_samples > 0:
@@ -138,6 +151,7 @@ def main() -> None:
             rmse_hd = rmse(pred[hd_mask], target[hd_mask]) if np.any(hd_mask) else 0.0
 
             ref_prof = extract_central_profile(target, axis=args.axis)
+            noisy_prof = extract_central_profile(noisy, axis=args.axis)
             pred_prof = extract_central_profile(pred, axis=args.axis)
             if args.axis == "x":
                 step_mm = float(spacing[0])
@@ -148,6 +162,23 @@ def main() -> None:
 
             gamma_3_3 = gamma_1d_pass_rate(ref_prof, pred_prof, step_mm=step_mm, dose_pct=3.0, dist_mm=3.0)
             gamma_2_2 = gamma_1d_pass_rate(ref_prof, pred_prof, step_mm=step_mm, dose_pct=2.0, dist_mm=2.0)
+            gamma_3_3_noisy = gamma_1d_pass_rate(ref_prof, noisy_prof, step_mm=step_mm, dose_pct=3.0, dist_mm=3.0)
+            gamma_2_2_noisy = gamma_1d_pass_rate(ref_prof, noisy_prof, step_mm=step_mm, dose_pct=2.0, dist_mm=2.0)
+
+            if args.save_plots:
+                depth_mm = np.arange(ref_prof.shape[0], dtype=np.float32) * step_mm
+                plt.figure(figsize=(8, 5))
+                plt.plot(depth_mm, normalize_profile(noisy_prof), label="Noisy", linewidth=1.7)
+                plt.plot(depth_mm, normalize_profile(pred_prof), label="Pred", linewidth=1.9)
+                plt.plot(depth_mm, normalize_profile(ref_prof), label="Target", linewidth=1.9)
+                plt.xlabel("Depth [mm]")
+                plt.ylabel("Relative Dose [%]")
+                plt.title(f"{f.stem} | axis={args.axis}")
+                plt.grid(alpha=0.3)
+                plt.legend()
+                plt.tight_layout()
+                plt.savefig(plots_dir / f"{f.stem}_profile.png", dpi=150)
+                plt.close()
 
             rows.append(
                 {
@@ -158,7 +189,9 @@ def main() -> None:
                     "mae_noisy": mae_noisy,
                     "mae_pred": mae_pred,
                     "rmse_hd_pred": rmse_hd,
+                    "gamma_3_3_noisy": gamma_3_3_noisy,
                     "gamma_3_3_pass_rate": gamma_3_3,
+                    "gamma_2_2_noisy": gamma_2_2_noisy,
                     "gamma_2_2_pass_rate": gamma_2_2,
                 }
             )
@@ -176,7 +209,9 @@ def main() -> None:
         "rmse_improve_pct_mean": float(np.mean([r["rmse_improve_pct"] for r in rows])),
         "mae_noisy_mean": float(np.mean([r["mae_noisy"] for r in rows])),
         "mae_pred_mean": float(np.mean([r["mae_pred"] for r in rows])),
+        "gamma_3_3_noisy_mean": float(np.mean([r["gamma_3_3_noisy"] for r in rows])),
         "gamma_3_3_pass_rate_mean": float(np.mean([r["gamma_3_3_pass_rate"] for r in rows])),
+        "gamma_2_2_noisy_mean": float(np.mean([r["gamma_2_2_noisy"] for r in rows])),
         "gamma_2_2_pass_rate_mean": float(np.mean([r["gamma_2_2_pass_rate"] for r in rows])),
     }
 
