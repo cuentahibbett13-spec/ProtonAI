@@ -1,3 +1,4 @@
+import inspect
 from typing import Optional, Tuple
 
 import torch
@@ -29,13 +30,18 @@ class SwinDoseMC(nn.Module):
 
         self.use_energy_token = use_energy_token
         total_in_channels = in_channels + (1 if use_energy_token else 0)
-        self.backbone = SwinUNETR(
-            img_size=img_size,
-            in_channels=total_in_channels,
-            out_channels=out_channels,
-            feature_size=feature_size,
-            use_checkpoint=False,
-        )
+        kwargs = {
+            "in_channels": total_in_channels,
+            "out_channels": out_channels,
+            "feature_size": feature_size,
+            "use_checkpoint": False,
+        }
+        sig = inspect.signature(SwinUNETR.__init__)
+        if "img_size" in sig.parameters:
+            kwargs["img_size"] = img_size
+        if "spatial_dims" in sig.parameters:
+            kwargs["spatial_dims"] = 3
+        self.backbone = SwinUNETR(**kwargs)
 
     def forward(self, x: torch.Tensor, energy: Optional[torch.Tensor] = None) -> torch.Tensor:
         if self.use_energy_token:
