@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -37,7 +37,7 @@ class SwinDoseMC(nn.Module):
             use_checkpoint=False,
         )
 
-    def forward(self, x: torch.Tensor, energy: torch.Tensor | None = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, energy: Optional[torch.Tensor] = None) -> torch.Tensor:
         if self.use_energy_token:
             if energy is None:
                 raise ValueError("energy tensor is required when use_energy_token=True")
