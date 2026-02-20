@@ -58,6 +58,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--resume-checkpoint", type=str, default=None)
+    parser.add_argument("--save-every-steps", type=int, default=200)
     return parser.parse_args()
 
 
@@ -108,6 +109,21 @@ def main() -> None:
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(args.epochs, 1))
 
+    def build_ckpt(epoch_idx: int, val_loss_value: float) -> dict:
+        return {
+            "epoch": epoch_idx,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scheduler_state_dict": scheduler.state_dict(),
+            "val_loss": val_loss_value,
+            "best_val_loss": min(best_val, val_loss_value),
+            "crop_shape": crop_shape,
+            "feature_size": args.feature_size,
+            "energy_min": args.energy_min,
+            "energy_max": args.energy_max,
+            "arch": "swin_unetr",
+        }
+
     start_epoch = 0
     best_val = float("inf")
     if args.resume_checkpoint:
@@ -121,41 +137,19 @@ def main() -> None:
         best_val = float(ckpt.get("best_val_loss", ckpt.get("val_loss", float("inf"))))
         print(f"Resuming from epoch {start_epoch}, best_val={best_val:.6f}")
 
-    for epoch in range(start_epoch, args.epochs):
-        model.train()
-        train_loss = 0.0
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{args.epochs} [Train]")
-        for batch in pbar:
-            x = batch["x"].to(device)
-            y = batch["y"].to(device)
-            e = batch["energy"].to(device)
+    global_step = 0
 
-            optimizer.zero_grad()
-            pred = model(x, e)
-            loss, metrics = physics_informed_loss(
-                pred,
-                y,
-                alpha=args.alpha,
-                beta=args.beta,
-                target_threshold=args.target_threshold,
-            )
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
-
-            train_loss += float(loss.item())
-            pbar.set_postfix({"loss": f"{metrics['loss']:.6f}", "g": f"{metrics['loss_global']:.6f}"})
-
-        train_loss /= max(len(train_loader), 1)
-
-        model.eval()
-        val_loss = 0.0
-        with torch.no_grad():
-            pbar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{args.epochs} [Val]")
+    try:
+        for epoch in range(start_epoch, args.epochs):
+            model.train()
+            train_loss = 0.0
+            pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{args.epochs} [Train]")
             for batch in pbar:
                 x = batch["x"].to(device)
                 y = batch["y"].to(device)
                 e = batch["energy"].to(device)
+
+                optimizer.zero_grad()
                 pred = model(x, e)
                 loss, metrics = physics_informed_loss(
                     pred,
@@ -164,34 +158,59 @@ def main() -> None:
                     beta=args.beta,
                     target_threshold=args.target_threshold,
                 )
-                val_loss += float(loss.item())
-                pbar.set_postfix({"loss": f"{metrics['loss']:.6f}"})
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                optimizer.step()
 
-        val_loss /= max(len(val_loader), 1)
-        scheduler.step()
+                global_step += 1
+                if args.save_every_steps > 0 and global_step % args.save_every_steps == 0:
+                    torch.save(build_ckpt(epoch, float("nan")), output_dir / "last_step.pt")
 
-        print(f"Epoch {epoch+1}: train_loss={train_loss:.6f}, val_loss={val_loss:.6f}")
+                train_loss += float(loss.item())
+                pbar.set_postfix({"loss": f"{metrics['loss']:.6f}", "g": f"{metrics['loss_global']:.6f}"})
 
-        ckpt = {
-            "epoch": epoch,
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "scheduler_state_dict": scheduler.state_dict(),
-            "val_loss": val_loss,
-            "best_val_loss": min(best_val, val_loss),
-            "crop_shape": crop_shape,
-            "feature_size": args.feature_size,
-            "energy_min": args.energy_min,
-            "energy_max": args.energy_max,
-            "arch": "swin_unetr",
-        }
-        torch.save(ckpt, output_dir / "last.pt")
+            train_loss /= max(len(train_loader), 1)
 
-        if val_loss < best_val:
-            best_val = val_loss
-            ckpt["best_val_loss"] = best_val
-            torch.save(ckpt, output_dir / "best.pt")
-            print(f"  -> Saved best checkpoint (val_loss={best_val:.6f})")
+            model.eval()
+            val_loss = 0.0
+            with torch.no_grad():
+                pbar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{args.epochs} [Val]")
+                for batch in pbar:
+                    x = batch["x"].to(device)
+                    y = batch["y"].to(device)
+                    e = batch["energy"].to(device)
+                    pred = model(x, e)
+                    loss, metrics = physics_informed_loss(
+                        pred,
+                        y,
+                        alpha=args.alpha,
+                        beta=args.beta,
+                        target_threshold=args.target_threshold,
+                    )
+                    val_loss += float(loss.item())
+                    pbar.set_postfix({"loss": f"{metrics['loss']:.6f}"})
+
+            val_loss /= max(len(val_loader), 1)
+            scheduler.step()
+
+            print(f"Epoch {epoch+1}: train_loss={train_loss:.6f}, val_loss={val_loss:.6f}")
+
+            ckpt = build_ckpt(epoch, val_loss)
+            torch.save(ckpt, output_dir / "last.pt")
+
+            if val_loss < best_val:
+                best_val = val_loss
+                ckpt["best_val_loss"] = best_val
+                torch.save(ckpt, output_dir / "best.pt")
+                print(f"  -> Saved best checkpoint (val_loss={best_val:.6f})")
+    except KeyboardInterrupt:
+        print("Training interrupted by user; saving emergency checkpoint...")
+        torch.save(build_ckpt(max(start_epoch, 0), float("nan")), output_dir / "interrupted.pt")
+        raise
+    except Exception:
+        print("Training crashed; saving emergency checkpoint...")
+        torch.save(build_ckpt(max(start_epoch, 0), float("nan")), output_dir / "crash.pt")
+        raise
 
     config = vars(args)
     config["crop_shape"] = crop_shape
