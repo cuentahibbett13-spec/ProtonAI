@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import argparse
 import csv
+import os
 from pathlib import Path
 
 import numpy as np
@@ -8,6 +9,28 @@ import torch
 
 from swin_dose_mc.data import crop_or_pad_3d
 from swin_dose_mc.model import SwinDoseMC
+
+
+def configure_rocm_runtime_dirs() -> None:
+    user = os.environ.get("USER", "user")
+
+    tmp_root = os.environ.get("TMPDIR")
+    if not tmp_root or not Path(tmp_root).exists():
+        slurm_tmp = os.environ.get("SLURM_TMPDIR")
+        if slurm_tmp and Path(slurm_tmp).exists():
+            tmp_root = slurm_tmp
+        else:
+            tmp_root = f"/tmp/{user}/protonai_tmp"
+    os.environ["TMPDIR"] = tmp_root
+    Path(tmp_root).mkdir(parents=True, exist_ok=True)
+
+    miopen_cache = os.environ.get("MIOPEN_CACHE_DIR", f"{tmp_root}/miopen_cache")
+    os.environ["MIOPEN_CACHE_DIR"] = miopen_cache
+    Path(miopen_cache).mkdir(parents=True, exist_ok=True)
+
+    miopen_user_db = os.environ.get("MIOPEN_USER_DB_PATH", f"{tmp_root}/miopen_user_db")
+    os.environ["MIOPEN_USER_DB_PATH"] = miopen_user_db
+    Path(miopen_user_db).mkdir(parents=True, exist_ok=True)
 
 
 def rmse(a: np.ndarray, b: np.ndarray) -> float:
@@ -53,6 +76,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    configure_rocm_runtime_dirs()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     ckpt = torch.load(args.checkpoint, map_location=device)
